@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { TEAMS } from '@/lib/teams';
 
@@ -16,28 +17,38 @@ function mapTeamName(apiName: string): string | null {
   return null;
 }
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
+    // Verify the user is an admin
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.is_admin) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     const summary: string[] = [];
 
     // 1. Auto-update status to 'live' for matches whose match_date has passed
     const now = new Date().toISOString();
-    const { data: shouldBeLive, error: liveError } = await supabaseAdmin
+    const { data: shouldBeLive } = await supabaseAdmin
       .from('matches')
       .select('*')
       .eq('status', 'upcoming')
       .lte('match_date', now);
 
     if (shouldBeLive && shouldBeLive.length > 0) {
-      const ids = shouldBeLive.map((m) => m.id);
+      const ids = shouldBeLive.map((m: any) => m.id);
       await supabaseAdmin
         .from('matches')
         .update({ status: 'live' })
@@ -46,10 +57,10 @@ export async function GET(request: NextRequest) {
       summary.push(`Updated ${ids.length} match(es) to live status`);
     }
 
-    // 2. Check CricAPI for completed matches
-    const apiKey = process.env.CRICAPI_KEY;
+    // 2. Check CricketData API for completed matches
+    const apiKey = process.env.CRICKETDATA_API_KEY;
     if (!apiKey) {
-      summary.push('No CRICAPI_KEY configured, skipping external results check');
+      summary.push('No CRICKETDATA_API_KEY configured, skipping external results check');
       return NextResponse.json({ summary });
     }
 
@@ -64,14 +75,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ summary });
     }
 
-    // Fetch current matches from CricAPI
+    // Fetch current matches from CricketData.org
     const apiResponse = await fetch(
       `https://api.cricapi.com/v1/currentMatches?apikey=${apiKey}&offset=0`
     );
     const apiData = await apiResponse.json();
 
     if (apiData.status !== 'success' || !apiData.data) {
-      summary.push('CricAPI returned no data or error');
+      summary.push('CricAPI returned no data or error: ' + (apiData.message || 'unknown'));
       return NextResponse.json({ summary });
     }
 
@@ -84,7 +95,6 @@ export async function GET(request: NextRequest) {
     );
 
     for (const apiMatch of iplCompleted) {
-      // Try to find a matching live match in our DB
       for (const dbMatch of liveMatches) {
         const team1Full = TEAMS[dbMatch.team1]?.name?.toLowerCase() || '';
         const team2Full = TEAMS[dbMatch.team2]?.name?.toLowerCase() || '';

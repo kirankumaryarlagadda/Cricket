@@ -29,6 +29,7 @@ export default function AdminClient({ matches: initialMatches }: Props) {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [syncResult, setSyncResult] = useState<string[] | null>(null);
   const [addForm, setAddForm] = useState({
     match_number: '',
     team1: ALL_TEAMS[0],
@@ -120,6 +121,25 @@ export default function AdminClient({ matches: initialMatches }: Props) {
     }
   };
 
+  // --- Sync Results from Cricket API ---
+  const handleSyncResults = async () => {
+    setLoading((p) => ({ ...p, sync: true }));
+    setSyncResult(null);
+    try {
+      const res = await fetch('/api/cron/update-results', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sync failed');
+      setSyncResult(data.summary || ['Sync complete']);
+      showMsg('success', 'Results synced successfully!');
+      // Refresh page to get updated matches
+      window.location.reload();
+    } catch (e: any) {
+      showMsg('error', e.message);
+    } finally {
+      setLoading((p) => ({ ...p, sync: false }));
+    }
+  };
+
   // --- Add Match ---
   const handleAddMatch = async () => {
     if (!addForm.match_number || !addForm.team1 || !addForm.team2 || !addForm.match_date || !addForm.venue) {
@@ -174,13 +194,23 @@ export default function AdminClient({ matches: initialMatches }: Props) {
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '1.5rem 1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
           <h1 style={{ color: '#1a202c', fontSize: '1.5rem', fontWeight: 800 }}>⚙️ Admin Panel</h1>
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="btn-primary"
-            style={{ width: 'auto', padding: '10px 20px', fontSize: '0.85rem' }}
-          >
-            {showAddForm ? '✕ Cancel' : '+ Add Match'}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={handleSyncResults}
+              disabled={loading.sync}
+              className="btn-primary"
+              style={{ width: 'auto', padding: '10px 20px', fontSize: '0.85rem', background: loading.sync ? '#a0aec0' : '#48bb78' }}
+            >
+              {loading.sync ? '⏳ Syncing...' : '🔄 Sync Results'}
+            </button>
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="btn-primary"
+              style={{ width: 'auto', padding: '10px 20px', fontSize: '0.85rem' }}
+            >
+              {showAddForm ? '✕ Cancel' : '+ Add Match'}
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -190,6 +220,16 @@ export default function AdminClient({ matches: initialMatches }: Props) {
             style={{ marginBottom: '1rem' }}
           >
             {message.text}
+          </div>
+        )}
+
+        {/* Sync Results */}
+        {syncResult && (
+          <div className="card" style={{ marginBottom: '1rem', border: '1px solid #48bb7840', background: '#f0fff4' }}>
+            <div style={{ fontWeight: 700, color: '#276749', marginBottom: 8, fontSize: '0.9rem' }}>🔄 Sync Results:</div>
+            {syncResult.map((s, i) => (
+              <div key={i} style={{ fontSize: '0.85rem', color: '#4a5568', padding: '2px 0' }}>• {s}</div>
+            ))}
           </div>
         )}
 
