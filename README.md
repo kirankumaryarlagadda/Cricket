@@ -21,6 +21,9 @@ A prediction game for IPL 2026 where players vote for match winners and compete 
 | 👤 **Player Approval** | Admin approves/rejects signups — no random access |
 | 🗑️ **Remove Players** | Admin can remove approved players (deletes account + all picks) |
 | ⚙️ **Admin Panel** | 3-tab panel: Matches, Players, Settings |
+| 🔑 **Admin Password Reset** | Admin can reset any player's password (generates temp password) |
+| 🔒 **Forgot Password** | Self-service password reset via email link |
+| 🔐 **Forced Password Reset** | After admin reset, user must set new password on login |
 | 🔄 **Auto-Scoring** | Sync results from Cricket API with one click |
 | 🌍 **Multi-Timezone** | All dates/times display in each player's local timezone |
 | 📱 **Responsive** | Grid + List view toggle, mobile-optimized leaderboard with card layout |
@@ -34,7 +37,7 @@ A prediction game for IPL 2026 where players vote for match winners and compete 
 
 | Stage | ✅ Correct | ❌ Wrong | ⛔ Missed (skipped) |
 |-------|-----------|---------|---------------------|
-| **League** (Match 1–56) | +5 | -3 | -3 |
+| **League** (Match 1–70) | +5 | -3 | -3 |
 | **Knockout** (Qualifier / Eliminator) | +10 | -5 | -5 |
 | **Final** | +15 | -10 | -10 |
 
@@ -70,7 +73,7 @@ A prediction game for IPL 2026 where players vote for match winners and compete 
 │   Next.js 15 App (App Router)                           │
 │   ├── Pages: Login, Signup, Pending Approval, Matches,  │
 │   │   Leaderboard, My Picks, Prizes, Rules, Profile,    │
-│   │   Match Detail, Admin                               │
+│   │   Match Detail, Admin, Reset Password, Force Reset  │
 │   ├── API Routes:                                       │
 │   │   ├── /api/picks            (POST/GET/DELETE)       │
 │   │   ├── /api/matches          (GET)                   │
@@ -84,7 +87,7 @@ A prediction game for IPL 2026 where players vote for match winners and compete 
 │   │   ├── /api/admin/manage-players (POST)              │
 │   │   ├── /api/admin/update-prizes  (POST)              │
 │   │   └── /api/cron/update-results  (POST, admin-only)  │
-│   └── Middleware: Auth + Approval gate                   │
+│   └── Middleware: Auth + Approval + Force Reset gate     │
 └───────────────────────┬─────────────────────────────────┘
                         │
               ┌─────────┴─────────┐
@@ -108,6 +111,24 @@ A prediction game for IPL 2026 where players vote for match winners and compete 
 
 ---
 
+## 📅 IPL 2026 Schedule
+
+| Detail | Value |
+|--------|-------|
+| **Total League Matches** | 70 (each of 10 teams plays 14 matches) |
+| **Playoff Matches** | TBD (Qualifier 1, Eliminator, Qualifier 2, Final) |
+| **Season Start** | March 28, 2026 |
+| **League End** | May 24, 2026 |
+| **Double Headers** | 12 days (3:30 PM + 7:30 PM IST) |
+| **Single Matches** | 7:30 PM IST |
+| **Venues** | 13 stadiums across India |
+| **Data Source** | Official iplt20.com schedule, cross-validated with PDF |
+
+### Venues
+Bengaluru, Mumbai, Guwahati, New Chandigarh, Lucknow, Kolkata, Chennai, Delhi, Ahmedabad, Hyderabad, Jaipur, Raipur, Dharamshala
+
+---
+
 ## 🗃️ Database Schema
 
 ### `profiles`
@@ -125,9 +146,9 @@ A prediction game for IPL 2026 where players vote for match winners and compete 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | UUID (PK) | Auto-generated |
-| match_number | INTEGER (UNIQUE) | Match 1, 2, 3... |
+| match_number | INTEGER (UNIQUE) | Match 1, 2, 3... up to 70+ |
 | team1 / team2 | TEXT | Team abbreviations (CSK, MI, RCB...) |
-| venue | TEXT | Stadium and city (contains "DEMO" for test matches) |
+| venue | TEXT | Stadium and city |
 | match_date | TIMESTAMPTZ | Match start time (stored as UTC) |
 | status | TEXT | `upcoming` / `live` / `completed` |
 | winner | TEXT | Set after match ends (NULL until then) |
@@ -189,8 +210,43 @@ A prediction game for IPL 2026 where players vote for match winners and compete 
 
 - **Email verification disabled** — controlled via admin approval instead
 - **SMTP configured via Resend** — for password reset emails (3,000/month free)
-- **Middleware** blocks unapproved users from all pages except `/login`, `/signup`, `/pending-approval`
+- **Middleware** blocks unapproved users from all pages except `/login`, `/signup`, `/pending-approval`, `/reset-password`, `/force-reset`
 - Admin can also **🗑️ Remove** approved players (deletes auth account + profile + all picks)
+
+---
+
+## 🔑 Password Reset (Two Methods)
+
+### Method 1: Self-Service (Forgot Password)
+```
+1. Player clicks "Forgot Password?" on login page
+2. Enters email → clicks "Send Reset Link"
+3. Receives email with reset link (via Resend SMTP)
+4. Clicks link → redirected to /reset-password
+5. Enters new password + confirms → done
+6. Redirected to app automatically
+```
+
+### Method 2: Admin Reset
+```
+1. Admin goes to /admin → 👥 Players tab
+2. Clicks "🔑 Reset Password" next to any player
+3. Confirms → gets a popup with:
+   ├── Player's email
+   └── Temporary password (auto-generated)
+4. Admin shares temp password with player (WhatsApp, text, etc.)
+5. Player logs in with email + temp password
+6. Middleware detects force_password_reset flag → redirects to /force-reset
+7. Player sets new password → flag cleared → enters app
+```
+
+| | Self-Service | Admin Reset |
+|---|---|---|
+| **Who initiates?** | Player | Admin |
+| **How?** | "Forgot Password?" link | Admin panel → 🔑 button |
+| **Delivery** | Email with reset link | Admin shares temp password manually |
+| **Reset page** | `/reset-password` | `/force-reset` (on next login) |
+| **Requires email?** | ✅ Yes | ❌ No (backup method) |
 
 ---
 
@@ -278,6 +334,8 @@ Kiran tries to change again     → ❌ "Once per day" (wait 24 hours)
 
 **Admin-only:** `/admin` — 3 tabs: Matches, Players, Settings
 
+**Auth pages:** `/login`, `/signup`, `/pending-approval`, `/reset-password`, `/force-reset`
+
 ---
 
 ## 👑 Admin Panel (`/admin`) — 3 Tabs
@@ -294,8 +352,9 @@ Kiran tries to change again     → ❌ "Once per day" (wait 24 hours)
 | Player Status | Actions |
 |---------------|---------|
 | **Pending** (just signed up) | ✅ Approve / ✗ Reject |
-| **Approved** (active player) | 🗑️ Remove (with confirmation popup) |
-| **Admin** (you) | No actions (can't remove yourself) |
+| **Approved** (active player) | 🔑 Reset Password / 👑 Make Admin / 🗑️ Remove |
+| **Admin** (other admins) | 🔑 Reset Password / 📋 Remove Admin |
+| **Admin** (yourself) | No actions (can't remove/demote yourself) |
 
 ### ⚙️ Settings Tab
 - Configure prize amounts ($) for: 1st Place, 2nd Place, 3rd Place, Longest Streak
@@ -308,9 +367,9 @@ Kiran tries to change again     → ❌ "Once per day" (wait 24 hours)
 | When | What to Do |
 |------|-----------|
 | **Before season** | Create demo matches for testing → remove when done |
-| **BCCI releases more matches** | Admin → + Add Match (or share PDF for bulk seed) |
 | **Schedule change** | Admin → ✏️ Edit match (date, time, venue) |
 | **New player signup** | Admin → 👥 Players → Approve |
+| **Player forgot password** | Player uses "Forgot Password?" OR admin uses 🔑 Reset Password |
 | **Match day** | Players pick → match starts → picks + skips revealed automatically |
 | **After match** | Admin → 🔄 Sync Results (or manually set winner) |
 | **Knockout stage** | Add matches with stage = qualifier / eliminator / final |
@@ -327,9 +386,11 @@ ipl-picks/
 │   ├── app/
 │   │   ├── page.tsx                          # Home → Matches dashboard (server component)
 │   │   ├── MatchesDashboard.tsx              # Grid/List toggle, pick/reset buttons, countdowns
-│   │   ├── login/page.tsx                    # Email/password login
+│   │   ├── login/page.tsx                    # Email/password login + forgot password flow
 │   │   ├── signup/page.tsx                   # Registration (name uniqueness check + auth metadata)
 │   │   ├── pending-approval/page.tsx         # "⏳ Waiting for Approval" page
+│   │   ├── reset-password/page.tsx           # Self-service password reset (from email link)
+│   │   ├── force-reset/page.tsx              # Forced password reset (after admin reset)
 │   │   ├── profile/page.tsx                  # Edit display name (24hr limit, reserved names)
 │   │   ├── leaderboard/
 │   │   │   ├── page.tsx                      # Server component (auth check)
@@ -360,7 +421,7 @@ ipl-picks/
 │   │       ├── admin/set-winner/route.ts     # POST set match winner + status=completed
 │   │       ├── admin/update-match/route.ts   # POST edit match details
 │   │       ├── admin/add-match/route.ts      # POST add new match
-│   │       ├── admin/manage-players/route.ts # POST approve/reject/remove players
+│   │       ├── admin/manage-players/route.ts # POST approve/reject/remove/admin/reset-password
 │   │       ├── admin/update-prizes/route.ts  # POST update prize amounts
 │   │       ├── cron/update-results/route.ts  # POST sync from Cricket API (admin-only)
 │   │       └── auth/callback/route.ts        # Email verification callback
@@ -370,17 +431,17 @@ ipl-picks/
 │   │   ├── types.ts                          # TypeScript interfaces + timezone helpers
 │   │   ├── scoring.ts                        # Point calculation + scoring table
 │   │   ├── teams.ts                          # 10 IPL teams (names, abbreviations, brand colors)
+│   │   ├── auto-status.ts                    # Auto-update matches from upcoming → live
 │   │   └── supabase/
 │   │       ├── client.ts                     # Browser client (anon key)
 │   │       ├── server.ts                     # Server client (respects RLS, uses cookies)
 │   │       ├── admin.ts                      # Service role client (bypasses RLS)
-│   │       └── middleware.ts                 # Auth gate + approval check + public path list
+│   │       └── middleware.ts                 # Auth + approval + force-reset gate
 │   └── middleware.ts                         # Next.js middleware entry point
-├── scripts/
-│   └── seed-matches.ts                       # Seed 20 IPL 2026 matches (IST timestamps)
 ├── supabase/
 │   ├── schema.sql                            # Initial DB schema (tables, RLS, triggers, indexes)
-│   └── migration-v2.sql                      # v2: is_approved, app_settings, prizes
+│   ├── migration-v2.sql                      # v2: is_approved, app_settings, prizes
+│   └── migration-v3.sql                      # v3: reserved_names table
 ├── vercel.json                               # Vercel config (empty — no cron on hobby plan)
 ├── package.json
 └── tsconfig.json
@@ -420,11 +481,8 @@ cp .env.local.example .env.local
 # Run database schema in Supabase SQL Editor
 # 1. Run supabase/schema.sql
 # 2. Run supabase/migration-v2.sql
-# 3. Run: ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_name_change TIMESTAMPTZ;
-# 4. Run: CREATE TABLE + seed reserved_names (see migration notes)
-
-# Seed IPL matches
-npm run seed
+# 3. Run supabase/migration-v3.sql
+# 4. Run: ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_name_change TIMESTAMPTZ;
 
 # Start dev server
 npm run dev
@@ -446,12 +504,13 @@ CRON_SECRET=your-cron-secret
 ## 🔧 Supabase Setup Checklist
 
 1. **Create project** at [supabase.com](https://supabase.com)
-2. **Run SQL** → `supabase/schema.sql` then `supabase/migration-v2.sql`
+2. **Run SQL** → `supabase/schema.sql` then `supabase/migration-v2.sql` then `supabase/migration-v3.sql`
 3. **Run SQL** → `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_name_change TIMESTAMPTZ;`
-4. **Run SQL** → Create `reserved_names` table + seed current names
-5. **Authentication → Sign In / Providers → Email** → Disable "Confirm email"
-6. **Authentication → URL Configuration** → Set Site URL + Redirect URL
-7. **SMTP** → Configure Resend for password reset emails
+4. **Authentication → Sign In / Providers → Email** → Disable "Confirm email"
+5. **Authentication → URL Configuration** → Set Site URL + add Redirect URLs:
+   - `https://your-domain.vercel.app/api/auth/callback`
+   - `https://your-domain.vercel.app/reset-password`
+6. **SMTP** → Configure Resend for password reset emails
 
 ---
 
@@ -485,6 +544,19 @@ CRON_SECRET=your-cron-secret
 | **v1.7** | Once per day name change limit, tiebreaker with wrong/missed picks |
 | **v1.8** | Streak prize for non-Top 3 only, separate Prizes + Rules pages |
 | **v1.9** | 6-page navigation, name change rules on Rules page, real pick count |
-| **v2.0** | Admin promote/demote system, tiebreaker with wrong/missed picks |
-| **v2.1** | Mobile responsive: hamburger nav, 2-row list view, smaller cards |
 | **v2.0** | Admin promote/demote system — admins can make and remove other admins |
+| **v2.1** | Mobile responsive: hamburger nav, 2-row list view, smaller cards |
+| **v2.2** | Full IPL 2026 schedule: 70 league matches loaded (Mar 28 – May 24) |
+| **v2.3** | Forgot password (self-service via email) + Admin password reset with forced change on login |
+
+---
+
+## 👥 Current Players (11)
+
+Kiran (Admin), Sk08, Legend, Venom, Bunty, Rolex, Rajaneesh, Nani, Sandy, Sandstorm XI, Dibc
+
+---
+
+## 📄 License
+
+Private project — not open for redistribution.
