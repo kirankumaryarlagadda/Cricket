@@ -551,12 +551,6 @@ CRON_SECRET=your-cron-secret
 
 ---
 
-## 👥 Current Players (11)
-
-Kiran (Admin), Sk08, Legend, Venom, Bunty, Rolex, Rajaneesh, Nani, Sandy, Sandstorm XI, Dibc
-
----
-
 ## 📄 License
 
 Private project — not open for redistribution.
