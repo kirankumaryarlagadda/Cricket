@@ -24,7 +24,7 @@ A prediction game for IPL 2026 where players vote for match winners and compete 
 | 🔑 **Admin Password Reset** | Admin can reset any player's password (generates temp password) |
 | 🔒 **Forgot Password** | Self-service password reset via email link |
 | 🔐 **Forced Password Reset** | After admin reset, user must set new password on login |
-| 🔄 **Auto-Scoring** | Sync results from Cricket API with one click |
+| 🔄 **Sync Results** | One-click auto-scoring via CricketData API (admin only) |
 | 🌍 **Multi-Timezone** | All dates/times display in each player's local timezone |
 | 📱 **Responsive** | Grid + List view toggle, mobile-optimized leaderboard with card layout |
 | 🎨 **Demo Match Support** | Demo matches highlighted in red for pre-season testing |
@@ -95,13 +95,13 @@ A prediction game for IPL 2026 where players vote for match winners and compete 
 ┌──────────────────────┐ ┌────────────────────┐
 │   Supabase (Free)    │ │  CricketData API   │
 │                      │ │  (Free Tier)       │
-│  ✦ PostgreSQL DB     │ │                    │
-│    ├── profiles      │ │  Used by admin to  │
-│    ├── matches       │ │  auto-fetch match  │
-│    ├── picks         │ │  results via       │
-│    ├── app_settings  │ │  "Sync Results"    │
-│    └── reserved_names│ │  button            │
-│                      │ │                    │
+│  ✦ PostgreSQL DB     │ │  100 req/day free  │
+│    ├── profiles      │ │                    │
+│    ├── matches       │ │  Used by admin to  │
+│    ├── picks         │ │  auto-fetch match  │
+│    ├── app_settings  │ │  results via       │
+│    └── reserved_names│ │  "Sync Results"    │
+│                      │ │  button            │
 │  ✦ Auth (email/pwd)  │ └────────────────────┘
 │  ✦ Row Level Security│
 │  ✦ Auto-triggers     │
@@ -211,6 +211,7 @@ Bengaluru, Mumbai, Guwahati, New Chandigarh, Lucknow, Kolkata, Chennai, Delhi, A
 - **Email verification disabled** — controlled via admin approval instead
 - **SMTP configured via Resend** — for password reset emails (3,000/month free)
 - **Middleware** blocks unapproved users from all pages except `/login`, `/signup`, `/pending-approval`, `/reset-password`, `/force-reset`
+- Middleware **always allows** `/reset-password` and `/force-reset` regardless of session state
 - Admin can also **🗑️ Remove** approved players (deletes auth account + profile + all picks)
 
 ---
@@ -222,9 +223,11 @@ Bengaluru, Mumbai, Guwahati, New Chandigarh, Lucknow, Kolkata, Chennai, Delhi, A
 1. Player clicks "Forgot Password?" on login page
 2. Enters email → clicks "Send Reset Link"
 3. Receives email with reset link (via Resend SMTP)
-4. Clicks link → redirected to /reset-password
-5. Enters new password + confirms → done
-6. Redirected to app automatically
+4. Clicks link → /api/auth/callback?type=recovery
+5. Callback exchanges code for session → redirects to /reset-password
+6. Player enters new password + confirms → done
+7. Redirected to app automatically
+8. If link expired/invalid → shows error with "← Back to Login" button (after 8s timeout)
 ```
 
 ### Method 2: Admin Reset
@@ -236,17 +239,85 @@ Bengaluru, Mumbai, Guwahati, New Chandigarh, Lucknow, Kolkata, Chennai, Delhi, A
    └── Temporary password (auto-generated)
 4. Admin shares temp password with player (WhatsApp, text, etc.)
 5. Player logs in with email + temp password
-6. Middleware detects force_password_reset flag → redirects to /force-reset
-7. Player sets new password → flag cleared → enters app
+6. Login detects force_password_reset flag in user metadata → redirects to /force-reset
+7. Middleware also enforces: any page visit → redirected to /force-reset
+8. Player sets new password → flag cleared → enters app normally
 ```
 
 | | Self-Service | Admin Reset |
 |---|---|---|
 | **Who initiates?** | Player | Admin |
 | **How?** | "Forgot Password?" link | Admin panel → 🔑 button |
-| **Delivery** | Email with reset link | Admin shares temp password manually |
-| **Reset page** | `/reset-password` | `/force-reset` (on next login) |
-| **Requires email?** | ✅ Yes | ❌ No (backup method) |
+| **Delivery** | Email with reset link (auto) | Admin shares temp password (manual) |
+| **Auth flow** | Email → `/api/auth/callback?type=recovery` → `/reset-password` | Login with temp password → `/force-reset` |
+| **Reset page** | `/reset-password` | `/force-reset` |
+| **Requires email working?** | ✅ Yes | ❌ No (backup method) |
+| **Link expiry** | Shows error after 8s if invalid | N/A (temp password works until changed) |
+
+---
+
+## 🔄 Sync Results (Auto-Scoring)
+
+### How It Works
+```
+Admin clicks "🔄 Sync Results" in Admin Panel → Matches Tab
+        │
+        ▼
+POST /api/cron/update-results
+        │
+        ├── Step 1: Auto-promote upcoming → live
+        │   (any match whose match_date has passed)
+        │
+        ├── Step 2: Fetch CricketData.org API
+        │   GET https://api.cricapi.com/v1/currentMatches
+        │
+        ├── Step 3: Filter for IPL T20 matches with matchEnded=true
+        │
+        ├── Step 4: Match API results to our DB 'live' matches
+        │   (matches by team names — CSK, MI, etc.)
+        │
+        └── Step 5: For completed matches → set winner + status='completed'
+                    Leaderboard auto-recalculates scores
+```
+
+### Key Behavior
+| Question | Answer |
+|----------|--------|
+| **What matches does it check?** | Only matches with `status = 'live'` |
+| **Will it reprocess completed matches?** | ❌ No — once `completed`, permanently skipped |
+| **Is it safe to click multiple times?** | ✅ Yes — idempotent, only updates what's needed |
+| **What if API has no results yet?** | Shows "No updates needed" — no changes made |
+| **What if API is down?** | Shows error message — no changes made |
+| **Fallback?** | Admin can always manually set winner via 🏆 dropdown |
+| **API rate limit?** | 100 requests/day (CricketData free tier) |
+| **Why no auto-cron?** | Vercel Hobby plan doesn't support cron jobs — manual button instead |
+
+### Example: Match 1 → Match 2 Timeline
+```
+Day 1 (Match 1: RCB vs SRH):
+  ├── Before match: status = 'upcoming'
+  ├── Match time passes: auto-promoted to 'live' (on page load or sync)
+  ├── After match: Admin clicks Sync → API returns winner → status = 'completed', winner = 'RCB'
+  └── Match 1 is DONE — never touched again by sync
+
+Day 2 (Match 2: MI vs KKR):
+  ├── Admin clicks Sync → query: SELECT * FROM matches WHERE status = 'live'
+  ├── Match 1 (completed) → SKIPPED ✅
+  ├── Match 2 (live) → checked against API → winner set if available
+  └── Only Match 2 processed
+```
+
+### What Admin Sees After Sync
+```
+🔄 Sync Results:
+• Updated 1 match(es) to live status
+• Match #1: RCB vs SRH — winner: RCB
+```
+Or if nothing to update:
+```
+🔄 Sync Results:
+• No live matches to check
+```
 
 ---
 
@@ -261,7 +332,7 @@ Bengaluru, Mumbai, Guwahati, New Chandigarh, Lucknow, Kolkata, Chennai, Delhi, A
 6. Match starts (status = 'live') → all picks REVEALED to everyone
    ├── Shows who picked which team (with team-colored cards)
    └── Shows who SKIPPED (⛔ grey cards)
-7. Match ends → admin sets winner → scores calculated automatically
+7. Match ends → admin sets winner (sync or manual) → scores calculated automatically
    ├── ✅ next to correct picks
    └── ❌ next to wrong picks
 ```
@@ -284,9 +355,9 @@ Bengaluru, Mumbai, Guwahati, New Chandigarh, Lucknow, Kolkata, Chennai, Delhi, A
 ```
 Kiran signs up as "Kiran"      → "kiran" reserved for Kiran
 Kiran changes to "KKY"         → "kky" also reserved for Kiran, "kiran" still reserved
-Dibc tries to signup as "Kiran" → ❌ "Previously used and reserved"
-Kiran changes back to "Kiran"   → ✅ Works (own reserved name)
-Kiran tries to change again     → ❌ "Once per day" (wait 24 hours)
+New user tries "Kiran"         → ❌ "Previously used and reserved"
+Kiran changes back to "Kiran"  → ✅ Works (own reserved name)
+Kiran tries to change again    → ❌ "Once per day" (wait 24 hours)
 ```
 
 ---
@@ -346,7 +417,7 @@ Kiran tries to change again     → ❌ "Once per day" (wait 24 hours)
 | **+ Add Match** | Add new matches (number, teams, date, time, venue, stage) |
 | **✏️ Edit** | Change date, time, venue, status, stage for any match |
 | **🏆 Set Winner** | Select winning team → auto-scores all players |
-| **🔄 Sync Results** | Fetches results from CricketData API, auto-sets winners |
+| **🔄 Sync Results** | One-click: auto-promotes upcoming→live, fetches CricketData API, sets winners for completed matches. Only processes `live` matches — completed matches are never reprocessed. Safe to click multiple times. |
 
 ### 👥 Players Tab
 | Player Status | Actions |
@@ -371,7 +442,7 @@ Kiran tries to change again     → ❌ "Once per day" (wait 24 hours)
 | **New player signup** | Admin → 👥 Players → Approve |
 | **Player forgot password** | Player uses "Forgot Password?" OR admin uses 🔑 Reset Password |
 | **Match day** | Players pick → match starts → picks + skips revealed automatically |
-| **After match** | Admin → 🔄 Sync Results (or manually set winner) |
+| **After match** | Admin → 🔄 Sync Results (or manually set winner via 🏆 dropdown) |
 | **Knockout stage** | Add matches with stage = qualifier / eliminator / final |
 | **Season ends** | Check leaderboard + prizes page for final standings 🏆 |
 | **Remove test data** | Delete demo matches via Admin |
@@ -423,8 +494,8 @@ ipl-picks/
 │   │       ├── admin/add-match/route.ts      # POST add new match
 │   │       ├── admin/manage-players/route.ts # POST approve/reject/remove/admin/reset-password
 │   │       ├── admin/update-prizes/route.ts  # POST update prize amounts
-│   │       ├── cron/update-results/route.ts  # POST sync from Cricket API (admin-only)
-│   │       └── auth/callback/route.ts        # Email verification callback
+│   │       ├── cron/update-results/route.ts  # POST sync from Cricket API (admin-only, idempotent)
+│   │       └── auth/callback/route.ts        # Auth callback — handles recovery redirects
 │   ├── components/
 │   │   └── Navbar.tsx                        # 6 nav links + avatar dropdown (Profile, Logout)
 │   ├── lib/
@@ -436,7 +507,7 @@ ipl-picks/
 │   │       ├── client.ts                     # Browser client (anon key)
 │   │       ├── server.ts                     # Server client (respects RLS, uses cookies)
 │   │       ├── admin.ts                      # Service role client (bypasses RLS)
-│   │       └── middleware.ts                 # Auth + approval + force-reset gate
+│   │       └── middleware.ts                 # Auth + approval + force-reset + reset-password gate
 │   └── middleware.ts                         # Next.js middleware entry point
 ├── supabase/
 │   ├── schema.sql                            # Initial DB schema (tables, RLS, triggers, indexes)
@@ -460,7 +531,7 @@ ipl-picks/
 | **Auth** | Supabase Auth (email/password) | Session management, auto-profile trigger |
 | **Email** | Resend SMTP | Free 3,000 emails/month for password resets |
 | **Hosting** | Vercel (Hobby) | Free, auto-deploy from GitHub on every push |
-| **Cricket Data** | CricketData.org API | Auto-fetch match results for scoring |
+| **Cricket Data** | CricketData.org API (100 req/day free) | Auto-fetch match results for scoring |
 
 ---
 
@@ -507,9 +578,11 @@ CRON_SECRET=your-cron-secret
 2. **Run SQL** → `supabase/schema.sql` then `supabase/migration-v2.sql` then `supabase/migration-v3.sql`
 3. **Run SQL** → `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_name_change TIMESTAMPTZ;`
 4. **Authentication → Sign In / Providers → Email** → Disable "Confirm email"
-5. **Authentication → URL Configuration** → Set Site URL + add Redirect URLs:
-   - `https://your-domain.vercel.app/api/auth/callback`
-   - `https://your-domain.vercel.app/reset-password`
+5. **Authentication → URL Configuration:**
+   - **Site URL:** `https://your-domain.vercel.app`
+   - **Redirect URLs** (add both):
+     - `https://your-domain.vercel.app/api/auth/callback`
+     - `https://your-domain.vercel.app/reset-password`
 6. **SMTP** → Configure Resend for password reset emails
 
 ---
@@ -548,6 +621,7 @@ CRON_SECRET=your-cron-secret
 | **v2.1** | Mobile responsive: hamburger nav, 2-row list view, smaller cards |
 | **v2.2** | Full IPL 2026 schedule: 70 league matches loaded (Mar 28 – May 24) |
 | **v2.3** | Forgot password (self-service via email) + Admin password reset with forced change on login |
+| **v2.4** | Fixed forgot password flow: email → callback → session → reset page. Added 8s timeout with error state. Middleware always allows /reset-password and /force-reset. |
 
 ---
 
