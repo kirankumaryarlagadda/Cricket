@@ -28,8 +28,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'action and user_id are required' }, { status: 400 });
     }
 
-    if (action !== 'approve' && action !== 'reject' && action !== 'remove' && action !== 'make-admin' && action !== 'demote-admin') {
-      return NextResponse.json({ error: 'action must be "approve", "reject", "remove", "make-admin", or "demote-admin"' }, { status: 400 });
+    if (action !== 'approve' && action !== 'reject' && action !== 'remove' && action !== 'make-admin' && action !== 'demote-admin' && action !== 'reset-password') {
+      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
     // Prevent removing yourself
@@ -48,6 +48,33 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({ success: true, message: 'Player is now an admin' });
+    }
+
+    if (action === 'reset-password') {
+      // Get the user's email
+      const { data: targetUser, error: userError } = await supabaseAdmin.auth.admin.getUserById(user_id);
+
+      if (userError || !targetUser?.user?.email) {
+        return NextResponse.json({ error: 'Failed to find user' }, { status: 500 });
+      }
+
+      // Set a temporary password and mark user for forced reset
+      const tempPassword = `TempReset_${Date.now()}!`;
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
+        password: tempPassword,
+        user_metadata: { force_password_reset: true },
+      });
+
+      if (updateError) {
+        return NextResponse.json({ error: 'Failed to reset password' }, { status: 500 });
+      }
+
+      return NextResponse.json({ 
+        success: true, 
+        message: `Password reset for ${targetUser.user.email}`,
+        temp_password: tempPassword,
+        email: targetUser.user.email,
+      });
     }
 
     if (action === 'demote-admin') {

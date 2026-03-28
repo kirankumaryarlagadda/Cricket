@@ -294,6 +294,33 @@ export default function AdminClient({ matches: initialMatches, profiles: initial
     }
   };
 
+  // --- Reset Password ---
+  const handleResetPassword = async (targetUserId: string, displayName: string) => {
+    setLoading((p) => ({ ...p, [`reset-${targetUserId}`]: true }));
+    try {
+      const res = await fetch('/api/admin/manage-players', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset-password', user_id: targetUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset password');
+      
+      // Show the temp password in an alert so admin can share it
+      window.alert(
+        `✅ Password reset for ${displayName}\n\n` +
+        `📧 Email: ${data.email}\n` +
+        `🔑 Temporary Password: ${data.temp_password}\n\n` +
+        `Share this with the player. They will be asked to set a new password on login.`
+      );
+      showMsg('success', `Password reset for ${displayName}`);
+    } catch (e: any) {
+      showMsg('error', e.message);
+    } finally {
+      setLoading((p) => ({ ...p, [`reset-${targetUserId}`]: false }));
+    }
+  };
+
   // --- Save Prizes ---
   const handleSavePrizes = async () => {
     setLoading((p) => ({ ...p, prizes: true }));
@@ -902,7 +929,27 @@ export default function AdminClient({ matches: initialMatches, profiles: initial
                       </div>
                     )}
                     {!isPending && !isAdmin && (
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Reset password for ${profile.display_name}? A temporary password will be generated.`)) {
+                              handleResetPassword(profile.id, profile.display_name);
+                            }
+                          }}
+                          disabled={loading[`reset-${profile.id}`]}
+                          style={{
+                            padding: '5px 14px',
+                            border: '1.5px solid #dd6b2040',
+                            borderRadius: 8,
+                            background: 'transparent',
+                            color: '#dd6b20',
+                            fontWeight: 600,
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {loading[`reset-${profile.id}`] ? '...' : '🔑 Reset Password'}
+                        </button>
                         <button
                           onClick={() => {
                             if (window.confirm(`Make ${profile.display_name} an admin? They will have full access to manage matches, players, and settings.`)) {
@@ -946,26 +993,48 @@ export default function AdminClient({ matches: initialMatches, profiles: initial
                       </div>
                     )}
                     {isAdmin && profile.id !== userId && (
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`Remove admin access from ${profile.display_name}? They will remain as an approved player.`)) {
-                            handleDemoteAdmin(profile.id);
-                          }
-                        }}
-                        disabled={loading[`demote-${profile.id}`]}
-                        style={{
-                          padding: '5px 14px',
-                          border: '1.5px solid #805ad540',
-                          borderRadius: 8,
-                          background: 'transparent',
-                          color: '#805ad5',
-                          fontWeight: 600,
-                          fontSize: '0.75rem',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {loading[`demote-${profile.id}`] ? '...' : '📋 Remove Admin'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Reset password for ${profile.display_name}? A temporary password will be generated.`)) {
+                              handleResetPassword(profile.id, profile.display_name);
+                            }
+                          }}
+                          disabled={loading[`reset-${profile.id}`]}
+                          style={{
+                            padding: '5px 14px',
+                            border: '1.5px solid #dd6b2040',
+                            borderRadius: 8,
+                            background: 'transparent',
+                            color: '#dd6b20',
+                            fontWeight: 600,
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {loading[`reset-${profile.id}`] ? '...' : '🔑 Reset Password'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Remove admin access from ${profile.display_name}? They will remain as an approved player.`)) {
+                              handleDemoteAdmin(profile.id);
+                            }
+                          }}
+                          disabled={loading[`demote-${profile.id}`]}
+                          style={{
+                            padding: '5px 14px',
+                            border: '1.5px solid #805ad540',
+                            borderRadius: 8,
+                            background: 'transparent',
+                            color: '#805ad5',
+                            fontWeight: 600,
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {loading[`demote-${profile.id}`] ? '...' : '📋 Remove Admin'}
+                        </button>
+                      </div>
                     )}
                   </div>
                 );

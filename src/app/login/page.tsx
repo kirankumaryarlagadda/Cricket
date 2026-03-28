@@ -24,13 +24,20 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (authError) {
         setError(authError.message);
+        return;
+      }
+
+      // Check if admin forced a password reset
+      if (data?.user?.user_metadata?.force_password_reset) {
+        router.push('/force-reset');
+        router.refresh();
         return;
       }
 

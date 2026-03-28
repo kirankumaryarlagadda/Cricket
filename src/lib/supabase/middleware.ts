@@ -33,7 +33,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const publicPaths = ['/login', '/signup', '/pending-approval', '/reset-password'];
+  const publicPaths = ['/login', '/signup', '/pending-approval', '/reset-password', '/force-reset'];
   const isPublicPath = publicPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
@@ -45,8 +45,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // If user is logged in, check if they are approved
+  // If user is logged in, check force password reset
   if (user && !isPublicPath && !isApiPath) {
+    // Force password reset takes priority
+    if (user.user_metadata?.force_password_reset && !request.nextUrl.pathname.startsWith('/force-reset')) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/force-reset';
+      return NextResponse.redirect(url);
+    }
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_approved')
@@ -61,7 +68,17 @@ export async function updateSession(request: NextRequest) {
   }
 
   // If user is logged in and trying to access login/signup, redirect to home
-  if (user && isPublicPath && !request.nextUrl.pathname.startsWith('/pending-approval')) {
+  if (user && isPublicPath && !request.nextUrl.pathname.startsWith('/pending-approval') && !request.nextUrl.pathname.startsWith('/force-reset')) {
+    // If force reset is needed, let them stay on force-reset
+    if (user.user_metadata?.force_password_reset) {
+      if (!request.nextUrl.pathname.startsWith('/force-reset')) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/force-reset';
+        return NextResponse.redirect(url);
+      }
+      return supabaseResponse;
+    }
+
     // But first check if approved
     const { data: profile } = await supabase
       .from('profiles')
