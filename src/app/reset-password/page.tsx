@@ -11,33 +11,53 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [ready, setReady] = useState(false);
+  const [expired, setExpired] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
-    // Supabase will automatically handle the token exchange from the URL hash
-    // We just need to check if we have a session
-    const checkSession = async () => {
+    let timeoutId: NodeJS.Timeout;
+    let mounted = true;
+
+    const init = async () => {
+      // Check if we already have a session (from the callback redirect)
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      if (session && mounted) {
         setReady(true);
-      } else {
-        // Listen for auth state change (PASSWORD_RECOVERY event)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-          if (event === 'PASSWORD_RECOVERY') {
-            setReady(true);
-          }
-        });
-        // Give it a moment, then check again
-        setTimeout(async () => {
-          const { data: { session: s } } = await supabase.auth.getSession();
-          if (s) setReady(true);
-        }, 2000);
-        return () => subscription.unsubscribe();
+        return;
       }
+
+      // Listen for PASSWORD_RECOVERY event (hash-based flow)
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (!mounted) return;
+        if (event === 'PASSWORD_RECOVERY' && session) {
+          setReady(true);
+        } else if (event === 'SIGNED_IN' && session) {
+          // Also accept SIGNED_IN — some Supabase versions fire this instead
+          setReady(true);
+        }
+      });
+
+      // After 8 seconds, if still not ready, show error
+      timeoutId = setTimeout(() => {
+        if (mounted && !ready) {
+          setExpired(true);
+        }
+      }, 8000);
+
+      return () => {
+        subscription.unsubscribe();
+      };
     };
-    checkSession();
-  }, [supabase.auth]);
+
+    init();
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,6 +146,23 @@ export default function ResetPasswordPage() {
               <p style={{ color: '#2f855a', fontSize: '0.85rem' }}>
                 Redirecting you to the app...
               </p>
+            </div>
+          ) : expired ? (
+            <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>⏰</div>
+              <p style={{ fontWeight: 700, color: '#c53030', fontSize: '1rem', marginBottom: '0.75rem' }}>
+                Reset link expired or invalid
+              </p>
+              <p style={{ color: '#718096', fontSize: '0.85rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+                The password reset link may have expired or was already used. 
+                Please request a new one from the login page.
+              </p>
+              <button
+                className="btn-primary"
+                onClick={() => router.push('/login')}
+              >
+                ← Back to Login
+              </button>
             </div>
           ) : !ready ? (
             <div style={{ textAlign: 'center', padding: '2rem 0' }}>

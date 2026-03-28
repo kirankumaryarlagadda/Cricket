@@ -38,17 +38,31 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith(path)
   );
   const isApiPath = request.nextUrl.pathname.startsWith('/api');
+  const isResetPasswordPath = request.nextUrl.pathname.startsWith('/reset-password');
+  const isForceResetPath = request.nextUrl.pathname.startsWith('/force-reset');
 
+  // Not logged in — redirect to login (except public paths and API)
   if (!user && !isPublicPath && !isApiPath) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
-  // If user is logged in, check force password reset
+  // ALWAYS allow /reset-password — user arrives here from email link with a fresh session
+  // They need to stay here to set their new password
+  if (isResetPasswordPath) {
+    return supabaseResponse;
+  }
+
+  // ALWAYS allow /force-reset — user arrives here after admin password reset
+  if (isForceResetPath) {
+    return supabaseResponse;
+  }
+
+  // Logged in user on a non-public, non-API path
   if (user && !isPublicPath && !isApiPath) {
     // Force password reset takes priority
-    if (user.user_metadata?.force_password_reset && !request.nextUrl.pathname.startsWith('/force-reset')) {
+    if (user.user_metadata?.force_password_reset) {
       const url = request.nextUrl.clone();
       url.pathname = '/force-reset';
       return NextResponse.redirect(url);
@@ -67,19 +81,16 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // If user is logged in and trying to access login/signup, redirect to home
-  if (user && isPublicPath && !request.nextUrl.pathname.startsWith('/pending-approval') && !request.nextUrl.pathname.startsWith('/force-reset')) {
-    // If force reset is needed, let them stay on force-reset
+  // Logged in user trying to access login/signup — redirect to home
+  if (user && isPublicPath && !request.nextUrl.pathname.startsWith('/pending-approval')) {
+    // If force reset is needed, send to force-reset
     if (user.user_metadata?.force_password_reset) {
-      if (!request.nextUrl.pathname.startsWith('/force-reset')) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/force-reset';
-        return NextResponse.redirect(url);
-      }
-      return supabaseResponse;
+      const url = request.nextUrl.clone();
+      url.pathname = '/force-reset';
+      return NextResponse.redirect(url);
     }
 
-    // But first check if approved
+    // Check if approved
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_approved')
