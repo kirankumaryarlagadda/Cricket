@@ -605,11 +605,11 @@ export default function AdminClient({ matches: initialMatches, profiles: initial
                           {match.status.toUpperCase()}
                         </span>
                         {match.winner && (
-                          {match.winner === 'NR' ? (
-                          <span className="badge" style={{ background: '#a0aec020', color: '#718096' }}>☔ No Result</span>
-                        ) : (
-                          <span className="badge badge-gold">🏆 {match.winner}</span>
-                        )}
+                          match.winner === 'NR' ? (
+                            <span className="badge" style={{ background: '#a0aec020', color: '#718096' }}>☔ No Result</span>
+                          ) : (
+                            <span className="badge badge-gold">🏆 {match.winner}</span>
+                          )
                         )}
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>

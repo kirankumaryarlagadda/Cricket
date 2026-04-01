@@ -203,7 +203,8 @@ export default function MyPicksClient({ matches, userPicks }: Props) {
                 const pick = getUserPick(match.id);
                 const result = getPickResult(match, pick);
                 const isNR = match.winner === 'NR';
-                const stgPts = getMatchPoints(match.stage); const points = isNR ? 0 : stgPts[result];
+                const stgPts = getMatchPoints(match.stage);
+                const points = isNR ? 0 : stgPts[result as keyof typeof stgPts];
                 const loser = isNR ? '' : (match.winner === match.team1 ? match.team2 : match.team1);
 
                 const rowBg =
