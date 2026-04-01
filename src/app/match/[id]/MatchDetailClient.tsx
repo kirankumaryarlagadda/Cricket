@@ -147,7 +147,7 @@ export default function MatchDetailClient({ match, picks, userPick: initialUserP
           </div>
 
           {/* Winner banner */}
-          {match.status === 'completed' && match.winner && (
+          {match.status === 'completed' && match.winner && match.winner !== 'NR' && (
             <div
               style={{
                 marginTop: 12,
@@ -159,6 +159,21 @@ export default function MatchDetailClient({ match, picks, userPick: initialUserP
             >
               <span style={{ fontWeight: 700, color: getTeamColor(match.winner), fontSize: '0.9rem' }}>
                 🏆 {getTeamFullName(match.winner)} won!
+              </span>
+            </div>
+          )}
+          {match.status === 'completed' && match.winner === 'NR' && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: '8px 20px',
+                background: '#a0aec015',
+                borderRadius: 12,
+                display: 'inline-block',
+              }}
+            >
+              <span style={{ fontWeight: 700, color: '#718096', fontSize: '0.9rem' }}>
+                ☔ Match Abandoned — No Result
               </span>
             </div>
           )}
@@ -249,8 +264,8 @@ export default function MatchDetailClient({ match, picks, userPick: initialUserP
                     const isMe = pick.user_id === userId;
                     const name = getName(pick.user_id);
                     const teamColor = getTeamColor(pick.picked_team);
-                    const isCorrect = match.status === 'completed' && match.winner === pick.picked_team;
-                    const isWrong = match.status === 'completed' && match.winner && match.winner !== pick.picked_team;
+                    const isCorrect = match.status === 'completed' && match.winner !== 'NR' && match.winner === pick.picked_team;
+                    const isWrong = match.status === 'completed' && match.winner !== 'NR' && match.winner && match.winner !== pick.picked_team;
                     return (
                       <div
                         key={pick.id}

@@ -11,7 +11,8 @@ interface Props {
   userPicks: Pick[];
 }
 
-function getPickResult(match: Match, pick: Pick | undefined): 'correct' | 'wrong' | 'missed' {
+function getPickResult(match: Match, pick: Pick | undefined): 'correct' | 'wrong' | 'missed' | 'nr' {
+  if (match.winner === 'NR') return 'nr';
   if (!pick) return 'missed';
   return pick.picked_team === match.winner ? 'correct' : 'wrong';
 }
@@ -36,6 +37,7 @@ export default function MyPicksClient({ matches, userPicks }: Props) {
   completedMatches.forEach((match) => {
     const pick = getUserPick(match.id);
     const result = getPickResult(match, pick);
+    if (result === 'nr') return; // Skip No Result matches
     const pts = getMatchPoints(match.stage);
     totalPoints += pts[result];
     if (result === 'correct') correct++;
@@ -200,8 +202,9 @@ export default function MyPicksClient({ matches, userPicks }: Props) {
               {[...completedMatches].reverse().map((match, i) => {
                 const pick = getUserPick(match.id);
                 const result = getPickResult(match, pick);
-                const stgPts = getMatchPoints(match.stage); const points = stgPts[result];
-                const loser = match.winner === match.team1 ? match.team2 : match.team1;
+                const isNR = match.winner === 'NR';
+                const stgPts = getMatchPoints(match.stage); const points = isNR ? 0 : stgPts[result];
+                const loser = isNR ? '' : (match.winner === match.team1 ? match.team2 : match.team1);
 
                 const rowBg =
                   result === 'correct'
@@ -221,6 +224,7 @@ export default function MyPicksClient({ matches, userPicks }: Props) {
                   correct: { bg: 'rgba(72,187,120,0.1)', color: '#48bb78', emoji: '✅' },
                   wrong: { bg: 'rgba(245,101,101,0.1)', color: '#f56565', emoji: '❌' },
                   missed: { bg: 'rgba(160,174,192,0.1)', color: '#a0aec0', emoji: '⛔' },
+                  nr: { bg: 'rgba(160,174,192,0.1)', color: '#718096', emoji: '☔' },
                 };
                 const bs = badgeStyle[result];
 
@@ -247,9 +251,18 @@ export default function MyPicksClient({ matches, userPicks }: Props) {
                           #{match.match_number}
                         </span>
                         <span style={{ fontSize: '0.85rem', color: '#4a5568' }}>
-                          <strong style={{ color: getTeamColor(match.winner!) }}>{match.winner}</strong>
-                          {' beat '}
-                          <span style={{ color: getTeamColor(loser) }}>{loser}</span>
+                          {isNR ? (
+                            <>
+                              <span style={{ color: '#718096' }}>{match.team1} vs {match.team2}</span>
+                              <span style={{ color: '#a0aec0', marginLeft: 6 }}>☔ No Result</span>
+                            </>
+                          ) : (
+                            <>
+                              <strong style={{ color: getTeamColor(match.winner!) }}>{match.winner}</strong>
+                              {' beat '}
+                              <span style={{ color: getTeamColor(loser) }}>{loser}</span>
+                            </>
+                          )}
                         </span>
                         {pick && (
                           <span style={{ fontSize: '0.75rem', color: '#a0aec0' }}>

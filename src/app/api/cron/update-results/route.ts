@@ -145,8 +145,19 @@ export async function POST(request: NextRequest) {
               summary.push(`Match #${dbMatch.match_number}: ${dbMatch.team1} vs ${dbMatch.team2} — winner: ${winnerAbbr}`);
               updatedCount++;
             } else if (apiMatch.matchEnded) {
-              // Match ended but we couldn't determine winner — log it
-              summary.push(`Match #${dbMatch.match_number}: ${dbMatch.team1} vs ${dbMatch.team2} — ended but winner unclear (status: "${statusText}")`);
+              // Check for No Result / Abandoned
+              const nrKeywords = ['no result', 'abandoned', 'no res', 'n/r', 'without result'];
+              const isNR = nrKeywords.some(kw => statusText.toLowerCase().includes(kw));
+              if (isNR) {
+                await supabaseAdmin
+                  .from('matches')
+                  .update({ status: 'completed', winner: 'NR' })
+                  .eq('id', dbMatch.id);
+                summary.push(`Match #${dbMatch.match_number}: ${dbMatch.team1} vs ${dbMatch.team2} — ☔ No Result`);
+                updatedCount++;
+              } else {
+                summary.push(`Match #${dbMatch.match_number}: ${dbMatch.team1} vs ${dbMatch.team2} — ended but winner unclear (status: "${statusText}")`);
+              }
             }
           } else if (apiMatch) {
             // Match found but not ended yet

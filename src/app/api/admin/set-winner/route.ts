@@ -39,9 +39,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Match not found' }, { status: 404 });
     }
 
-    // Validate winner is one of the teams
-    if (winner !== match.team1 && winner !== match.team2) {
-      return NextResponse.json({ error: 'Winner must be one of the teams playing' }, { status: 400 });
+    // Validate winner is one of the teams or NR
+    if (winner !== match.team1 && winner !== match.team2 && winner !== 'NR') {
+      return NextResponse.json({ error: 'Winner must be one of the teams or NR (No Result)' }, { status: 400 });
     }
 
     // Update match

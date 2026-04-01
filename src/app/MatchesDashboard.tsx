@@ -58,7 +58,8 @@ function formatTimeLocal(dateStr: string): string {
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-function getPickResult(match: Match, pick: Pick | undefined): 'correct' | 'wrong' | 'missed' {
+function getPickResult(match: Match, pick: Pick | undefined): 'correct' | 'wrong' | 'missed' | 'nr' {
+  if (match.winner === 'NR') return 'nr';
   if (!pick) return 'missed';
   return pick.picked_team === match.winner ? 'correct' : 'wrong';
 }
@@ -567,13 +568,15 @@ export default function MatchesDashboard({ matches, userPicks, allPicks, userId 
                 const userPick = getUserPick(localPicks, match.id);
                 const result = getPickResult(match, userPick);
                 const stagePoints = getMatchPoints(match.stage);
-                const points = stagePoints[result];
-                const loser = match.winner === match.team1 ? match.team2 : match.team1;
+                const points = result === 'nr' ? 0 : stagePoints[result];
+                const isNR = match.winner === 'NR';
+                const loser = isNR ? '' : (match.winner === match.team1 ? match.team2 : match.team1);
 
                 const badgeStyle: Record<string, { bg: string; color: string; emoji: string }> = {
                   correct: { bg: 'rgba(72,187,120,0.1)', color: '#48bb78', emoji: '✅' },
                   wrong: { bg: 'rgba(245,101,101,0.1)', color: '#f56565', emoji: '❌' },
                   missed: { bg: 'rgba(160,174,192,0.1)', color: '#a0aec0', emoji: '⛔' },
+                  nr: { bg: 'rgba(160,174,192,0.1)', color: '#718096', emoji: '☔' },
                 };
                 const bs = badgeStyle[result];
 
@@ -600,9 +603,18 @@ export default function MatchesDashboard({ matches, userPicks, allPicks, userId 
                           Match #{match.match_number}
                         </span>
                         <span style={{ fontSize: '0.9rem', color: '#4a5568' }}>
-                          <strong style={{ color: getTeamColor(match.winner!) }}>{match.winner}</strong>
-                          {' beat '}
-                          <span style={{ color: getTeamColor(loser) }}>{loser}</span>
+                          {isNR ? (
+                            <>
+                              <span style={{ color: '#718096' }}>{match.team1} vs {match.team2}</span>
+                              <span style={{ color: '#a0aec0', marginLeft: 6 }}>☔ No Result</span>
+                            </>
+                          ) : (
+                            <>
+                              <strong style={{ color: getTeamColor(match.winner!) }}>{match.winner}</strong>
+                              {' beat '}
+                              <span style={{ color: getTeamColor(loser) }}>{loser}</span>
+                            </>
+                          )}
                         </span>
                       </div>
                       <div

@@ -28,6 +28,10 @@ export function getScoringTable(): { stage: string; correct: number; wrong: numb
   ];
 }
 
+export function isNoResult(winner: string | null): boolean {
+  return winner === 'NR';
+}
+
 export function calculateScore(
   picks: { match_id: string; picked_team: string }[],
   matches: { id: string; status: string; winner: string | null; stage: MatchStage }[]
@@ -50,6 +54,9 @@ export function calculateScore(
   const completedMatches = matches.filter((m) => m.status === 'completed');
 
   for (const match of completedMatches) {
+    // Skip No Result matches — 0 points, doesn't count as anything
+    if (isNoResult(match.winner)) continue;
+
     const points = getMatchPoints(match.stage);
     const pickedTeam = picksByMatchId.get(match.id);
 

@@ -93,6 +93,9 @@ export async function GET() {
 
       // completedMatches is ordered by match_number
       for (const match of completedMatches) {
+        // Skip No Result matches — don't affect scores or streaks
+        if (match.winner === 'NR') continue;
+
         const stage = match.stage as MatchStage;
         const pickedTeam = userPicks.get(match.id);
         const pts = getMatchPoints(stage);

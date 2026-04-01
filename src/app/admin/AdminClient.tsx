@@ -605,7 +605,11 @@ export default function AdminClient({ matches: initialMatches, profiles: initial
                           {match.status.toUpperCase()}
                         </span>
                         {match.winner && (
+                          {match.winner === 'NR' ? (
+                          <span className="badge" style={{ background: '#a0aec020', color: '#718096' }}>☔ No Result</span>
+                        ) : (
                           <span className="badge badge-gold">🏆 {match.winner}</span>
+                        )}
                         )}
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
@@ -779,6 +783,7 @@ export default function AdminClient({ matches: initialMatches, profiles: initial
                           <option value="">Select...</option>
                           <option value={match.team1}>{match.team1}</option>
                           <option value={match.team2}>{match.team2}</option>
+                          <option value="NR">☔ No Result</option>
                         </select>
                         <button
                           onClick={() => handleSetWinner(match.id)}
@@ -787,15 +792,15 @@ export default function AdminClient({ matches: initialMatches, profiles: initial
                             padding: '6px 16px',
                             border: 'none',
                             borderRadius: 8,
-                            background: settingWinner[match.id] ? '#ecc94b' : '#e2e8f0',
-                            color: settingWinner[match.id] ? '#744210' : '#a0aec0',
+                            background: settingWinner[match.id] ? (settingWinner[match.id] === 'NR' ? '#a0aec0' : '#ecc94b') : '#e2e8f0',
+                            color: settingWinner[match.id] ? (settingWinner[match.id] === 'NR' ? '#fff' : '#744210') : '#a0aec0',
                             fontWeight: 700,
                             fontSize: '0.8rem',
                             cursor: settingWinner[match.id] ? 'pointer' : 'default',
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          {loading[`winner-${match.id}`] ? '...' : '🏆 Set Winner'}
+                          {loading[`winner-${match.id}`] ? '...' : settingWinner[match.id] === 'NR' ? '☔ Set No Result' : '🏆 Set Winner'}
                         </button>
                       </div>
                     )}
