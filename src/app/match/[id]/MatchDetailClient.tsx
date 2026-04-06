@@ -211,8 +211,8 @@ export default function MatchDetailClient({ match, picks, userPick: initialUserP
           </div>
         )}
 
-        {/* PICKS REVEALED (deadline passed — 30 min before match start) */}
-        {deadlinePassed && (
+        {/* PICKS REVEALED (match started — live or completed) */}
+        {matchStarted && (
           <section>
             {/* Pick Distribution Bar */}
             <div className="card" style={{ marginBottom: '1.5rem' }}>
@@ -399,8 +399,8 @@ export default function MatchDetailClient({ match, picks, userPick: initialUserP
           </section>
         )}
 
-        {/* PICKS HIDDEN (before deadline) */}
-        {!deadlinePassed && (
+        {/* PICKS HIDDEN (upcoming) */}
+        {match.status === 'upcoming' && (
           <section>
             <div className="card" style={{ textAlign: 'center' }}>
               {!deadlinePassed && !userPick ? (
@@ -457,7 +457,7 @@ export default function MatchDetailClient({ match, picks, userPick: initialUserP
               >
                 <div style={{ fontSize: '1.25rem', marginBottom: 4 }}>🔒</div>
                 <div style={{ color: '#a0aec0', fontSize: '0.85rem', fontWeight: 500 }}>
-                  Picks will be revealed after the deadline (30 min before match)
+                  Picks will be revealed when the match starts
                 </div>
                 {totalPickCount > 0 && (
                   <div style={{ color: '#667eea', fontWeight: 600, fontSize: '0.9rem', marginTop: 8 }}>

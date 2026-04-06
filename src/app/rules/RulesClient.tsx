@@ -79,8 +79,8 @@ export default function RulesClient() {
             {[
               { icon: '⏰', text: 'Picks lock 30 minutes before match start time' },
               { icon: '✏️', text: 'You can change or reset your pick anytime before the deadline' },
-              { icon: '🔒', text: 'Picks are hidden from other players until the deadline (30 min before match)' },
-              { icon: '👁️', text: 'Once the deadline passes, all picks are revealed — including who skipped' },
+              { icon: '🔒', text: 'Picks are hidden from other players until the match starts' },
+              { icon: '👁️', text: 'Once the match starts, all picks are revealed — including who skipped' },
               { icon: '⛔', text: 'Not picking before deadline counts as missed (same penalty as wrong pick)' },
               { icon: '🔥', text: 'Consecutive correct picks build your winning streak' },
               { icon: '💔', text: 'A wrong pick OR missed pick breaks your streak' },
