@@ -199,13 +199,18 @@ export default function MatchDetailClient({ match, picks, userPick: initialUserP
             <div style={{ fontSize: '0.8rem', color: '#a0aec0' }}>
               {getTeamFullName(userPick.picked_team)}
             </div>
-            {match.status === 'completed' && match.winner && (
+            {match.status === 'completed' && match.winner && match.winner !== 'NR' && (
               <div style={{ marginTop: 8 }}>
                 {userPick.picked_team === match.winner ? (
                   <span className="badge badge-success">✅ Correct Pick!</span>
                 ) : (
                   <span className="badge badge-error">❌ Wrong Pick</span>
                 )}
+              </div>
+            )}
+            {match.status === 'completed' && match.winner === 'NR' && (
+              <div style={{ marginTop: 8 }}>
+                <span className="badge" style={{ background: '#a0aec020', color: '#718096' }}>☔ No Result — 0 pts</span>
               </div>
             )}
           </div>
